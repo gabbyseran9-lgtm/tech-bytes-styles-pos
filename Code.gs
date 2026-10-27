@@ -57,7 +57,7 @@ const out = o => ContentService.createTextOutput(JSON.stringify(o)).setMimeType(
 function doGet(e) { return run(e.parameter.action, e.parameter); }
 function doPost(e) { let p; try { p = JSON.parse(e.postData.contents); } catch (x) { return out({ok:false,error:'Invalid request body'}); } return run(p.action, p); }
 function run(a, p) {
-  const W = {saveProduct:saveProduct,archiveProduct:archiveProduct,createSale:createSale,voidSale:voidSale,stockMove:stockMove,saveExpense:saveExpense,saveSettings:saveSettings};
+  const W = {deleteProduct: deleteProduct,saveProduct:saveProduct,archiveProduct:archiveProduct,createSale:createSale,voidSale:voidSale,stockMove:stockMove,saveExpense:saveExpense,saveSettings:saveSettings};
   const R = {bootstrap:bootstrap,sales:listSales,movements:()=>rows('InventoryMovements').map(clean).reverse(),expenses:()=>rows('Expenses').map(clean).reverse(),report:report};
   try {
     if (W[a]) { const l = LockService.getScriptLock(); l.waitLock(25000); try { return out({ok:true,data:W[a](p)}); } finally { l.releaseLock(); } }
@@ -91,7 +91,41 @@ function archiveProduct(p) {
   const ex = rows('Products').filter(x => x.product_id === p.product_id)[0]; if (!ex) throw new Error('Product not found');
   const st = p.restore ? 'ACTIVE' : 'ARCHIVED'; upd('Products', ex._row, {status:st}); audit(st,'Product',ex.product_id,{}); return bootstrap();
 }
+function deleteProduct(p) {
+  const id = String(p.product_id || '').trim();
 
+  if (!id) {
+    throw new Error('Product ID is required');
+  }
+
+  const product = rows('Products')
+    .filter(x => x.product_id == id)[0];
+
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  if (String(product.status).toUpperCase() !== 'ARCHIVED') {
+    throw new Error('Archive the product first before permanently deleting it.');
+  }
+
+  const sheet = sh_('Products');
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).trim() === id) {
+      sheet.deleteRow(i + 1);
+
+      audit('DELETE', 'Product', id, {
+        product_name: product.product_name
+      });
+
+      return bootstrap();
+    }
+  }
+
+  throw new Error('Product not found');
+}
 // ---------- sales ----------
 function listSales() {
   const items = {}; rows('SaleItems').forEach(i => (items[i.transaction_id] = items[i.transaction_id] || []).push(clean(i)));
