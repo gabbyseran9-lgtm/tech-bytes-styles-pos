@@ -121,7 +121,7 @@ async function products() {
 function drawProducts() {
   const q = $('#q').value.toLowerCase(), list = S.products.filter(p => (p.product_name + p.product_id + p.category).toLowerCase().includes(q));
   $('#pl').innerHTML = tbl(['ID','Name','Category','Price','Cost','Stock','Unit','Low at','Status',''], list.map(p => `<tr><td>${esc(p.product_id)}</td><td>${esc(p.product_name)}</td><td>${esc(p.category)}</td><td class="n">${Number(p.selling_price) > 0 ? peso(p.selling_price) : '<span class="warn">Not set</span>'}</td><td class="n">${peso(p.cost_per_unit)}</td><td class="n">${p.current_stock}</td><td>${esc(p.stock_unit)}</td><td>${p.low_stock_threshold}</td><td>${p.status}</td>
-  <td><button class="btn ghost sm" onclick="productForm('${esc(p.product_id)}')">Edit</button> <button class="btn ghost sm" onclick="archive('${esc(p.product_id)}',${p.status === 'ARCHIVED'})">${p.status === 'ARCHIVED' ? 'Restore' : 'Archive'}</button></td></tr>`).join(''), 'No products match.');
+  <td><button class="btn ghost sm" onclick="productForm('${esc(p.product_id)}')">Edit</button> <button class="btn ghost sm" ${p.status === 'ARCHIVED' ? 'Restore' : 'Archive'}</button> <button class="btn bad sm" onclick="removeProduct('${esc(p.product_id)}')">Delete</button></td></tr>`, 'No products match.');
 }
 function productForm(id) {
   const p = id ? prod(id) : {}, add = !id;
@@ -129,7 +129,11 @@ function productForm(id) {
     async o => { const b = await post('saveProduct',o); S.products = b.products; toast('Product saved'); drawProducts(); });
 }
 async function archive(id, restore) { if (!confirm(restore ? 'Restore this product?' : 'Archive this product? Past sales are kept.')) return; const b = await busy(() => post('archiveProduct',{product_id:id,restore})); if (b) { S.products = b.products; drawProducts(); } }
-
+async function removeProduct(id) {
+  if (!confirm('Permanently delete this product? This cannot be undone.')) return;
+  const b = await busy(() => post('deleteProduct', {product_id: id}));
+  if (b) { S.products = b.products; toast('Product deleted'); drawProducts(); }
+}
 // ---------- inventory ----------
 async function inventory() {
   const mv = await api('movements');
